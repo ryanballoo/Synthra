@@ -1,14 +1,13 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
-import Editor from './pages/Editor';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Lab from "./pages/Lab";
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/editor" element={<Editor />} />
+        {/* Default route points to Lab */}
+        <Route path="/" element={<Lab />} />
       </Routes>
     </Router>
   );

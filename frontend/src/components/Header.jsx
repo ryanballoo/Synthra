@@ -1,14 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 export default function Header() {
   return (
-    <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
-      <h1 className="text-xl font-bold">Synthra</h1>
-      <nav className="space-x-4">
-        <Link to="/" className="hover:underline">Home</Link>
-        <Link to="/editor" className="hover:underline">Editor</Link>
-      </nav>
-    </header>
+    <div className="bg-blue-600 text-white p-6 rounded mb-6">
+      <h1 className="text-3xl font-bold">Welcome to your lab!</h1>
+      <p className="text-lg mt-2">What would you like to create today?</p>
+    </div>
   );
 }

@@ -2,4 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Additional custom styles can go here */
+/* Optional global styles */
+body {
+  @apply bg-gray-100 text-gray-900;
+  font-family: 'Inter', sans-serif;
+}
