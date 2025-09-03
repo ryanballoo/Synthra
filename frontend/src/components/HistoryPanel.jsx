@@ -1,22 +1,31 @@
-import React from 'react';
+import React from "react";
 
 export default function HistoryPanel({ history, handlePreviewClick }) {
   return (
-    <div className="w-64 border border-gray-300 rounded p-4 bg-gray-50 overflow-y-auto">
-      <h3 className="font-bold text-lg mb-4">Generated Content History</h3>
-      {history.length === 0 && <p className="text-gray-500">No content yet</p>}
-      <ul className="space-y-2">
-        {history.map((item, index) => (
-          <li
-            key={index}
-            className="border p-2 rounded cursor-pointer hover:bg-gray-100 truncate"
-            onClick={() => handlePreviewClick(item)}
-          >
-            <span className="font-semibold">{item.type}: </span>
-            <span className="truncate block">{item.content}</span>
-          </li>
-        ))}
-      </ul>
+    <div className="w-64 border border-gray-300 rounded p-4 bg-gray-50 flex-shrink-0 overflow-y-auto">
+      <h3 className="text-lg font-semibold mb-4">History</h3>
+      {history.length === 0 ? (
+        <p className="text-gray-500">No history yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {history.map((item, idx) => (
+            <li
+              key={idx}
+              onClick={() => handlePreviewClick(item)}
+              className={`p-2 rounded cursor-pointer border ${
+                item.guest
+                  ? "bg-yellow-100 border-yellow-300 hover:bg-yellow-200"
+                  : "bg-white border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              <span className="font-medium">{item.type}</span>
+              {item.guest && (
+                <span className="ml-2 text-xs text-yellow-700 italic">(Guest)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
