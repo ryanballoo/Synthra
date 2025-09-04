@@ -1,37 +1,15 @@
 import React, { useRef, useState, useEffect } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
 
 const ProductScanner = ({ onProductScanned }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [error, setError] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const [model, setModel] = useState(null);
-  const [detectedObjects, setDetectedObjects] = useState([]);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
-  const detectionRef = useRef(null);
 
   // Start scanning automatically when component mounts
-  // Initialize COCO-SSD model
-  useEffect(() => {
-    const loadModel = async () => {
-      try {
-        console.log('Loading COCO-SSD model...');
-        const loadedModel = await cocoSsd.load();
-        console.log('Model loaded successfully');
-        setModel(loadedModel);
-      } catch (err) {
-        console.error('Failed to load model:', err);
-        setError('Failed to load object detection model');
-      }
-    };
-    loadModel();
-  }, []);
-
-  // Initialize camera and start detection
   useEffect(() => {
     console.log('ProductScanner mounted');
     const initializeCamera = async () => {
@@ -44,21 +22,8 @@ const ProductScanner = ({ onProductScanned }) => {
     };
     
     initializeCamera();
-    return () => {
-      stopCamera();
-      // Cancel any ongoing detection
-      if (detectionRef.current) {
-        cancelAnimationFrame(detectionRef.current);
-      }
-    };
+    return () => stopCamera();
   }, []);
-
-  // Start object detection when model and video are ready
-  useEffect(() => {
-    if (model && isReady && isScanning) {
-      detectObjects();
-    }
-  }, [model, isReady, isScanning]);
 
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -122,71 +87,28 @@ const ProductScanner = ({ onProductScanned }) => {
     }
   };
 
-  const detectObjects = async () => {
-    if (!model || !videoRef.current || !overlayRef.current || !isScanning) return;
-
-    try {
-      // Detect objects in the video frame
-      const predictions = await model.detect(videoRef.current);
-      
-      // Update state with detected objects
-      setDetectedObjects(predictions);
-      
-      // Draw the detections
-      drawOverlay(predictions);
-
-      // Continue detection loop
-      detectionRef.current = requestAnimationFrame(detectObjects);
-    } catch (err) {
-      console.error('Detection error:', err);
-      setError('Object detection failed');
-    }
-  };
-
-  const drawOverlay = (predictions = []) => {
+  const drawOverlay = () => {
     if (!overlayRef.current) return;
     
     const ctx = overlayRef.current.getContext('2d');
     const width = overlayRef.current.width;
     const height = overlayRef.current.height;
     
-    // Clear previous drawing
     ctx.clearRect(0, 0, width, height);
-    
-    // Draw scanning area
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 2;
+    
     const margin = 50;
     ctx.beginPath();
     ctx.rect(margin, margin, width - margin * 2, height - margin * 2);
     ctx.stroke();
     
-    // Draw corner markers
     const cornerSize = 20;
     ctx.beginPath();
     ctx.moveTo(margin, margin + cornerSize);
     ctx.lineTo(margin, margin);
     ctx.lineTo(margin + cornerSize, margin);
     ctx.stroke();
-
-    // Draw detected objects
-    predictions.forEach(prediction => {
-      const [x, y, width, height] = prediction.bbox;
-      
-      // Draw bounding box
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, width, height);
-      
-      // Draw label
-      ctx.fillStyle = '#00ff00';
-      ctx.font = '16px Arial';
-      ctx.fillText(
-        `${prediction.class} ${Math.round(prediction.score * 100)}%`,
-        x, 
-        y > 20 ? y - 5 : y + height + 20
-      );
-    });
   };
 
   const captureProduct = async () => {
@@ -204,18 +126,11 @@ const ProductScanner = ({ onProductScanned }) => {
     const imageData = canvas.toDataURL('image/jpeg');
     setCapturedImage(imageData);
     
-    // Get the most confident detection
-    const mainProduct = detectedObjects.reduce((best, current) => {
-      return (current.score > (best?.score || 0)) ? current : best;
-    }, null);
-    
     onProductScanned({
-      name: mainProduct ? mainProduct.class : "Unknown Product",
+      name: "Scanned Product",
       image: imageData,
-      features: detectedObjects.map(obj => `${obj.class} (${Math.round(obj.score * 100)}% confidence)`),
-      category: mainProduct ? mainProduct.class : "Unknown Category",
-      confidence: mainProduct ? mainProduct.score : 0,
-      allDetections: detectedObjects
+      features: ["Auto-detected Feature 1", "Auto-detected Feature 2"],
+      category: "Scanned Category"
     });
   };
 

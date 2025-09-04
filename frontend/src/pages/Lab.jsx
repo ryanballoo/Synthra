@@ -329,8 +329,21 @@ export default function Lab() {
       />
 
       {showScanner && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-2xl w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg max-w-4xl w-full mx-auto relative overflow-hidden">
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={() => setShowScanner(false)}
+                className="bg-white rounded-full p-2 hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <h2 className="text-2xl font-bold mb-6">Scan Your Product</h2>
+            
             <ProductScanner
               onProductScanned={(productData) => {
                 setShowScanner(false);
@@ -341,12 +354,6 @@ export default function Lab() {
                 );
               }}
             />
-            <button
-              onClick={() => setShowScanner(false)}
-              className="mt-4 text-gray-600 hover:text-gray-800"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
