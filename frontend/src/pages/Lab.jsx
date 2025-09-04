@@ -5,6 +5,8 @@ import PromptArea from "../components/PromptArea";
 import PresetButtons from "../components/PresetButtons";
 import PreviewModal from "../components/PreviewModal";
 import HistoryPanel from "../components/HistoryPanel";
+import ProductScanner from "../components/ProductScanner";
+import { api, getTrends, getSchedule } from "../services/api";
 
 export default function Lab() {
   const location = useLocation();
@@ -28,6 +30,7 @@ export default function Lab() {
   const [history, setHistory] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Marketing state
   const [trends, setTrends] = useState([]);
@@ -80,32 +83,52 @@ export default function Lab() {
 
   // Marketing analysis
   const handleMarketingAnalysis = async () => {
-    if (isGuest) return; // Guests cannot access marketing features
+    if (isGuest) {
+      alert("Please log in to access marketing features");
+      return;
+    }
+
+    if (!surveyData.companyName) {
+      alert("Please complete the company survey first");
+      return;
+    }
+
     setLoading(true);
     try {
-      const { logo, ...surveyPayload } = surveyData;
+      const surveyPayload = { ...surveyData };
 
-      // Fetch trends
-      const trendsRes = await fetch("http://127.0.0.1:8000/api/marketing/trends", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ surveyData: surveyPayload }),
-      });
-      const trendsData = await trendsRes.json();
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Please log in first');
+        return;
+      }
+
+      // Set auth header
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      console.log('Sending request with survey data:', surveyPayload);
+      
+      // Fetch trends using API service
+      const trendsData = await getTrends({ surveyData: surveyPayload });
+      console.log('Received trends:', trendsData);
       setTrends(trendsData.trends || []);
 
-      // Fetch schedule
-      const scheduleRes = await fetch("http://127.0.0.1:8000/api/marketing/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trends: trendsData.trends || [] }),
-      });
-      const scheduleData = await scheduleRes.json();
+      // Fetch schedule using API service
+      const scheduleData = await getSchedule({ trends: trendsData.trends || [] });
+      console.log('Received schedule:', scheduleData);
       setSchedule(scheduleData.schedule || []);
     } catch (err) {
       console.error("Marketing API error:", err);
+      console.error("Response:", err.response?.data);
       setTrends([]);
       setSchedule([]);
+      if (err.response?.status === 401) {
+        alert("Please log in again to continue");
+        // Optionally redirect to login
+      } else {
+        alert("Failed to fetch marketing data. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -115,7 +138,7 @@ export default function Lab() {
     if (isGuest) return; // Guests cannot publish
     try {
       const cleanItem = Object.fromEntries(
-        Object.entries(item).filter(([_, v]) => v !== null && v !== undefined)
+        Object.entries(item).filter(([, value]) => value !== null && value !== undefined)
       );
 
       const res = await fetch("http://127.0.0.1:8000/api/marketing/publish", {
@@ -197,6 +220,15 @@ export default function Lab() {
   return (
     <div className="flex flex-col min-h-screen p-6">
       <Header />
+
+      <div className="flex gap-4 items-start mb-4">
+        <button
+          onClick={() => setShowScanner(true)}
+          className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors"
+        >
+          📷 Scan Product
+        </button>
+      </div>
 
       <PromptArea
         prompt={prompt}
@@ -295,6 +327,29 @@ export default function Lab() {
         preview={preview}
         type={type}
       />
+
+      {showScanner && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-2xl w-full">
+            <ProductScanner
+              onProductScanned={(productData) => {
+                setShowScanner(false);
+                // Use product data to generate content
+                handleGenerate(
+                  `Create content for ${productData.name}: ${productData.features.join(', ')}`,
+                  'Text'
+                );
+              }}
+            />
+            <button
+              onClick={() => setShowScanner(false)}
+              className="mt-4 text-gray-600 hover:text-gray-800"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
