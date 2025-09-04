@@ -3,8 +3,9 @@ from pydantic import BaseModel
 from typing import List
 from app.database import create_marketing
 from app.routers.auth import get_current_user
+import asyncio
 
-router = APIRouter(prefix="/api/marketing", tags=["Marketing"])
+router = APIRouter(tags=["Marketing"])
 
 # --- Request Models ---
 class SurveyData(BaseModel):
@@ -52,9 +53,12 @@ async def get_trends(request: TrendsRequest, user: dict = Depends(get_current_us
     """
     trends = generate_trends(request.surveyData)
 
-    # Save trends to DB if logged in
-    if user:
-        await create_marketing(user_id=user["_id"], marketing_data={"trends": trends})
+    # Save trends to DB if authenticated and not guest (non-blocking)
+    try:
+        if user and not user.get("is_guest"):
+            asyncio.create_task(create_marketing(user_id=user["_id"], marketing_data={"trends": trends}))
+    except Exception:
+        pass
 
     return {"trends": trends}
 
@@ -64,7 +68,8 @@ async def get_schedule(request: ScheduleRequest, user: dict = Depends(get_curren
     Only logged-in users can fetch schedule.
     Guests get 403 Forbidden.
     """
-    if not user:
+    # Block guests from generating schedule
+    if not user or user.get("is_guest"):
         raise HTTPException(status_code=403, detail="Guests cannot generate schedule. Please log in.")
     
     schedule = generate_schedule(request.trends)

@@ -120,9 +120,6 @@ export default function Lab() {
         return;
       }
 
-      // Set auth header
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
       console.log('Sending request with survey data:', surveyPayload);
       
       // Fetch trends using API service
@@ -157,13 +154,19 @@ export default function Lab() {
         Object.entries(item).filter(([, value]) => value !== null && value !== undefined)
       );
 
-      const res = await fetch("http://127.0.0.1:8000/api/marketing/publish", {
+      // Reuse API base and auth header
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/marketing/publish`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(cleanItem),
       });
       const data = await res.json();
-      alert(data.message);
+      if (!res.ok) throw new Error(data?.detail || 'Publish failed');
+      alert(data.message || 'Published');
     } catch (err) {
       console.error("Publish API error:", err);
     }

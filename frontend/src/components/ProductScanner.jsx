@@ -6,69 +6,58 @@ const ProductScanner = ({ onProductScanned }) => {
   const [capturedImage, setCapturedImage] = useState(null);
   const [error, setError] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const [model, setModel] = useState(null);
   const [detectedObjects, setDetectedObjects] = useState([]);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const detectionRef = useRef(null);
+  const isModelInitialized = useRef(false);
 
   // Start scanning automatically when component mounts
   // Initialize product analyzer
   useEffect(() => {
     let mounted = true;
     
-    const initializeAnalyzer = async () => {
+    const initialize = async () => {
       try {
+        // First initialize the ML model
         setError('Initializing detection model...');
         await productAnalyzer.initialize();
-        if (mounted) {
-          setIsReady(true);
-          setError('Scanning... Position object in the green box');
-        }
+        if (!mounted) return;
+        
+        isModelInitialized.current = true;
+        setError('Initializing camera...');
+        
+        // Then initialize the camera
+        await startScanning();
+        if (!mounted) return;
+        
+        setError('Scanning... Position object in the green box');
       } catch (err) {
-        console.error('Failed to initialize analyzer:', err);
+        console.error('Initialization failed:', err);
         if (mounted) {
-          setError('Failed to initialize detection. Please refresh the page.');
+          setError(`Failed to initialize: ${err.message}. Please refresh the page.`);
         }
       }
     };
     
-    initializeAnalyzer();
+    initialize();
     
     return () => {
       mounted = false;
-    };
-  }, []);
-
-  // Initialize camera and start detection
-  useEffect(() => {
-    console.log('ProductScanner mounted');
-    const initializeCamera = async () => {
-      try {
-        await startScanning();
-      } catch (err) {
-        console.error('Failed to initialize camera:', err);
-        setError('Failed to initialize camera');
-      }
-    };
-    
-    initializeCamera();
-    return () => {
       stopCamera();
-      // Cancel any ongoing detection
       if (detectionRef.current) {
         cancelAnimationFrame(detectionRef.current);
       }
     };
   }, []);
 
-  // Start object detection when model and video are ready
+  // Start object detection when video is ready and scanning
   useEffect(() => {
-    if (model && isReady && isScanning) {
+    if (isReady && isScanning && isModelInitialized.current) {
       detectObjects();
     }
-  }, [model, isReady, isScanning]);
+  }, [isReady, isScanning]);
 
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -78,6 +67,10 @@ const ProductScanner = ({ onProductScanned }) => {
     }
     setIsScanning(false);
     setIsReady(false);
+    if (detectionRef.current) {
+      cancelAnimationFrame(detectionRef.current);
+      detectionRef.current = null;
+    }
   };
 
   const startScanning = async () => {
@@ -133,7 +126,11 @@ const ProductScanner = ({ onProductScanned }) => {
   };
 
   const detectObjects = async () => {
-    if (!videoRef.current || !overlayRef.current || !isScanning) return;
+    if (!videoRef.current || !overlayRef.current || !isScanning || !isModelInitialized.current) {
+      // If conditions aren't met, try again in the next frame
+      detectionRef.current = requestAnimationFrame(detectObjects);
+      return;
+    }
 
     try {
       // Clear any previous error
@@ -142,7 +139,7 @@ const ProductScanner = ({ onProductScanned }) => {
       // Analyze current video frame
       const analysis = await productAnalyzer.analyzeImage(videoRef.current);
       
-      // Update state with detected objects
+      // Update state with detected objects if component is still mounted
       setDetectedObjects(analysis.products);
       
       // Draw the detections
@@ -154,19 +151,12 @@ const ProductScanner = ({ onProductScanned }) => {
       } else {
         setError(null);
       }
-
-      // Continue detection loop with a slight delay for performance
-      detectionRef.current = setTimeout(() => {
-        requestAnimationFrame(detectObjects);
-      }, 100); // Add a small delay between detections
     } catch (err) {
       console.error('Detection error:', err);
       setError('Detection temporarily unavailable. Please try again.');
-      
-      // Retry after a short delay
-      detectionRef.current = setTimeout(() => {
-        requestAnimationFrame(detectObjects);
-      }, 1000);
+    } finally {
+      // Schedule next detection frame
+      detectionRef.current = requestAnimationFrame(detectObjects);
     }
   };
 

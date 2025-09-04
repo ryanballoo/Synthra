@@ -8,7 +8,7 @@ import os
 load_dotenv()
 
 # Import your routers (these may instantiate services using env)
-from app.routers import ml, marketing, auth, profile, content
+from app.routers import ml, marketing, auth, profile, content, health
 
 app = FastAPI(title="Synthra API")
 
@@ -32,3 +32,4 @@ app.include_router(profile.router, prefix="/api/profile", tags=["Profile"])
 app.include_router(content.router, prefix="/api/content", tags=["Content"])
 app.include_router(marketing.router, prefix="/api/marketing", tags=["Marketing"])
 app.include_router(ml.router, prefix="/api/ml", tags=["ML"])
+app.include_router(health.router, prefix="/api", tags=["Health"])
