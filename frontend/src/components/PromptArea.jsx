@@ -24,10 +24,12 @@ export default function PromptArea({
           onChange={(e) => setType(e.target.value)}
           className="border rounded p-2"
         >
-          <option value="Text">Text</option>
-          <option value="Email">Email</option>
-          <option value="Social Media">Social Media</option>
-          <option value="Blog">Blog</option>
+          <option value="Text">Marketing Copy</option>
+          <option value="Image">Product Image</option>
+          <option value="Social">Social Media Post</option>
+          <option value="Product">Product Description</option>
+          <option value="Email">Marketing Email</option>
+          <option value="Ad">Advertisement</option>
         </select>
 
         <button

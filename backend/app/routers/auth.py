@@ -36,9 +36,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
     - Logged-in user dict if valid JWT is provided
     - Guest dict if no auth header is provided
     """
-    logger.info(f"Authorization header received: {authorization[:20]}...")
-    
     if authorization:
+        logger.info("Authorization header received")
         token = authorization.split(" ")[1] if " " in authorization else authorization
         try:
             logger.info("Attempting to decode JWT token")
@@ -59,6 +58,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             raise HTTPException(status_code=401, detail="Invalid token")
     
     # Return guest user if no token
+    logger.info("No Authorization header provided, proceeding as Guest")
     return {"_id": "guest", "email": None, "name": "Guest", "is_guest": True}
 
 @router.post("/login", response_model=LoginResponse)

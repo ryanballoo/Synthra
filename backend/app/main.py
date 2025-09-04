@@ -1,24 +1,30 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from dotenv import load_dotenv
+import os
 
-# Import your routers
+# Load .env before importing modules that read env on import
+load_dotenv()
+
+# Import your routers (these may instantiate services using env)
 from app.routers import ml, marketing, auth, profile, content
 
 app = FastAPI(title="Synthra API")
 
-# Enable CORS for React frontend
-origins = [
-    "http://localhost:5173",  # React dev server
-    "http://127.0.0.1:5173",
-]
-
+# Enable CORS for development origins
+# In dev, allow all to quickly unblock CORS; tighten later using BACKEND_CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # Temporarily allow all origins for debugging
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+# Add Gzip compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

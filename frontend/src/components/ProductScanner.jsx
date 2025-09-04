@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import { productAnalyzer } from '../services/productAnalysis';
 
 const ProductScanner = ({ onProductScanned }) => {
   const [isScanning, setIsScanning] = useState(false);
@@ -15,20 +14,31 @@ const ProductScanner = ({ onProductScanned }) => {
   const detectionRef = useRef(null);
 
   // Start scanning automatically when component mounts
-  // Initialize COCO-SSD model
+  // Initialize product analyzer
   useEffect(() => {
-    const loadModel = async () => {
+    let mounted = true;
+    
+    const initializeAnalyzer = async () => {
       try {
-        console.log('Loading COCO-SSD model...');
-        const loadedModel = await cocoSsd.load();
-        console.log('Model loaded successfully');
-        setModel(loadedModel);
+        setError('Initializing detection model...');
+        await productAnalyzer.initialize();
+        if (mounted) {
+          setIsReady(true);
+          setError('Scanning... Position object in the green box');
+        }
       } catch (err) {
-        console.error('Failed to load model:', err);
-        setError('Failed to load object detection model');
+        console.error('Failed to initialize analyzer:', err);
+        if (mounted) {
+          setError('Failed to initialize detection. Please refresh the page.');
+        }
       }
     };
-    loadModel();
+    
+    initializeAnalyzer();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Initialize camera and start detection
@@ -123,30 +133,52 @@ const ProductScanner = ({ onProductScanned }) => {
   };
 
   const detectObjects = async () => {
-    if (!model || !videoRef.current || !overlayRef.current || !isScanning) return;
+    if (!videoRef.current || !overlayRef.current || !isScanning) return;
 
     try {
-      // Detect objects in the video frame
-      const predictions = await model.detect(videoRef.current);
+      // Clear any previous error
+      setError(null);
+
+      // Analyze current video frame
+      const analysis = await productAnalyzer.analyzeImage(videoRef.current);
       
       // Update state with detected objects
-      setDetectedObjects(predictions);
+      setDetectedObjects(analysis.products);
       
       // Draw the detections
-      drawOverlay(predictions);
+      drawOverlay(analysis.products);
 
-      // Continue detection loop
-      detectionRef.current = requestAnimationFrame(detectObjects);
+      // Update error state based on detections
+      if (analysis.products.length === 0) {
+        setError('Scanning... Position object in the green box');
+      } else {
+        setError(null);
+      }
+
+      // Continue detection loop with a slight delay for performance
+      detectionRef.current = setTimeout(() => {
+        requestAnimationFrame(detectObjects);
+      }, 100); // Add a small delay between detections
     } catch (err) {
       console.error('Detection error:', err);
-      setError('Object detection failed');
+      setError('Detection temporarily unavailable. Please try again.');
+      
+      // Retry after a short delay
+      detectionRef.current = setTimeout(() => {
+        requestAnimationFrame(detectObjects);
+      }, 1000);
     }
   };
 
   const drawOverlay = (predictions = []) => {
-    if (!overlayRef.current) return;
+    if (!overlayRef.current || !videoRef.current) return;
     
     const ctx = overlayRef.current.getContext('2d');
+    
+    // Make sure overlay matches video dimensions
+    overlayRef.current.width = videoRef.current.videoWidth;
+    overlayRef.current.height = videoRef.current.videoHeight;
+    
     const width = overlayRef.current.width;
     const height = overlayRef.current.height;
     
@@ -154,15 +186,19 @@ const ProductScanner = ({ onProductScanned }) => {
     ctx.clearRect(0, 0, width, height);
     
     // Draw scanning area
-    ctx.strokeStyle = '#00ff00';
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
     ctx.lineWidth = 2;
-    const margin = 50;
+    const margin = height * 0.1; // 10% margin
     ctx.beginPath();
     ctx.rect(margin, margin, width - margin * 2, height - margin * 2);
     ctx.stroke();
     
     // Draw corner markers
-    const cornerSize = 20;
+    const cornerSize = Math.min(width, height) * 0.05; // 5% of smaller dimension
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 3;
+    
+    // Top-left corner
     ctx.beginPath();
     ctx.moveTo(margin, margin + cornerSize);
     ctx.lineTo(margin, margin);
@@ -170,52 +206,84 @@ const ProductScanner = ({ onProductScanned }) => {
     ctx.stroke();
 
     // Draw detected objects
-    predictions.forEach(prediction => {
-      const [x, y, width, height] = prediction.bbox;
+    predictions.forEach(product => {
+      const [x, y, width, height] = product.boundingBox;
       
-      // Draw bounding box
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 2;
+      // Draw bounding box with animation effect
+      ctx.strokeStyle = `rgba(0, 255, 0, ${Math.abs(Math.sin(Date.now() / 500))})`; // Pulsing effect
+      ctx.lineWidth = 3;
       ctx.strokeRect(x, y, width, height);
+      
+      // Draw semi-transparent background for label
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      const labelText = `${product.name} ${Math.round(product.confidence * 100)}%`;
+      const textWidth = ctx.measureText(labelText).width;
+      ctx.fillRect(x, y > 30 ? y - 30 : y + height, textWidth + 10, 25);
       
       // Draw label
       ctx.fillStyle = '#00ff00';
-      ctx.font = '16px Arial';
+      ctx.font = 'bold 16px Arial';
       ctx.fillText(
-        `${prediction.class} ${Math.round(prediction.score * 100)}%`,
-        x, 
-        y > 20 ? y - 5 : y + height + 20
+        labelText,
+        x + 5,
+        y > 30 ? y - 10 : y + height + 20
       );
+      
+      // Draw corners for emphasis
+      const cornerLength = 20;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + cornerLength, y);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + cornerLength);
+      ctx.stroke();
     });
   };
 
   const captureProduct = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
+    // Only capture if we have valid detections
+    if (!detectedObjects || detectedObjects.length === 0) {
+      setError('No objects detected. Please ensure the object is clearly visible.');
+      return;
+    }
+
     const canvas = canvasRef.current;
     const video = videoRef.current;
     
+    // Set canvas to video dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
     
-    const imageData = canvas.toDataURL('image/jpeg');
-    setCapturedImage(imageData);
+    // Draw the video frame
+    ctx.drawImage(video, 0, 0);
     
     // Get the most confident detection
     const mainProduct = detectedObjects.reduce((best, current) => {
-      return (current.score > (best?.score || 0)) ? current : best;
+      return (current.confidence > (best?.confidence || 0)) ? current : best;
     }, null);
     
+    if (!mainProduct || mainProduct.confidence < 0.5) {
+      setError('Detection confidence too low. Please try again with better lighting or positioning.');
+      return;
+    }
+
+    const imageData = canvas.toDataURL('image/jpeg', 0.95); // Higher quality JPEG
+    setCapturedImage(imageData);
+    
+    // Pass the scanned data to parent
     onProductScanned({
-      name: mainProduct ? mainProduct.class : "Unknown Product",
+      name: mainProduct.name,
       image: imageData,
-      features: detectedObjects.map(obj => `${obj.class} (${Math.round(obj.score * 100)}% confidence)`),
-      category: mainProduct ? mainProduct.class : "Unknown Category",
-      confidence: mainProduct ? mainProduct.score : 0,
-      allDetections: detectedObjects
+      features: detectedObjects
+        .filter(obj => obj.confidence > 0.5)
+        .map(obj => `${obj.name} (${Math.round(obj.confidence * 100)}% confidence)`),
+      category: mainProduct.name,
+      confidence: mainProduct.confidence,
+      allDetections: detectedObjects.filter(obj => obj.confidence > 0.5)
     });
   };
 

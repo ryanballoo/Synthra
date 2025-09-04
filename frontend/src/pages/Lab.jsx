@@ -6,7 +6,7 @@ import PresetButtons from "../components/PresetButtons";
 import PreviewModal from "../components/PreviewModal";
 import HistoryPanel from "../components/HistoryPanel";
 import ProductScanner from "../components/ProductScanner";
-import { api, getTrends, getSchedule } from "../services/api";
+import { api, getTrends, getSchedule, generateMLContent } from "../services/api";
 
 export default function Lab() {
   const location = useLocation();
@@ -30,6 +30,7 @@ export default function Lab() {
   const [history, setHistory] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
 
   // Marketing state
@@ -52,19 +53,34 @@ export default function Lab() {
   // ML content generation
   const handleGenerate = async (promptText, contentType) => {
     if (!promptText) return;
+    
     setLoading(true);
+    setError(null);
+    
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ml/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: promptText, type: contentType }),
-      });
-      const data = await res.json();
-      setPreview(data.generated);
-      setHistory([{ type: contentType, content: data.generated }, ...history]);
+      console.log('Generating content with:', { promptText, contentType, context: surveyData });
+      
+      const data = await generateMLContent(promptText, contentType, surveyData);
+      console.log('Generated content:', data);
+      
+      // Handle different content types
+      let displayContent = data.generated;
+      if (contentType === 'Image') {
+        displayContent = `<img src="${data.generated}" alt="Generated content" style="max-width: 100%;" />`;
+      }
+
+      setPreview(displayContent);
+      setHistory(prev => [{ 
+        type: contentType, 
+        content: displayContent,
+        timestamp: new Date().toISOString()
+      }, ...prev]);
       setModalOpen(true);
     } catch (err) {
       console.error("ML API error:", err);
+      const errorMessage = err.message || 'Failed to generate content. Please try again.';
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -220,6 +236,25 @@ export default function Lab() {
   return (
     <div className="flex flex-col min-h-screen p-6">
       <Header />
+
+      {/* Error Message */}
+      {error && (
+        <div className="mx-auto w-full max-w-7xl px-4 py-3 mb-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <span className="block sm:inline">{error}</span>
+            <button 
+              className="absolute top-0 bottom-0 right-0 px-4 py-3"
+              onClick={() => setError(null)}
+            >
+              <span className="sr-only">Dismiss</span>
+              <svg className="h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <title>Close</title>
+                <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-4 items-start mb-4">
         <button
